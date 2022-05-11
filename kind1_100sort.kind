@@ -1,0 +1,226 @@
+Cemsort.max_num: Nat
+	100
+
+Cemsort.Board.size: Nat
+	5
+
+type Cemsort.State {
+	new(
+		board: Cemsort.Board
+		chosen_nums: List<Nat>
+		turn: Nat
+		crnt_num: Maybe<Nat>
+	)
+}
+
+Cemsort.State.initial: Cemsort.State
+	Cemsort.State.new(
+		Cemsort.Board.initial,
+		List.nil<Nat>,
+		0,
+		Maybe.none<Nat>
+	)
+
+Cemsort.Board: Type
+	List<List<Maybe<Nat>>>
+
+Cemsort.Board.initial: Cemsort.Board
+	List.build!(
+		Cemsort.Board.size,
+		List.build!(Cemsort.Board.size, Maybe.none<Nat>)
+	)
+
+Cemsort.Board.get(board: Cemsort.Board, pos: Cemsort.Board.Pos): Maybe<Nat>
+	open pos
+	board[pos.fst][pos.snd] <> none
+
+Cemsort.Board.set(
+	board: Cemsort.Board,
+	pos: Cemsort.Board.Pos,
+	val: Nat
+): Cemsort.Board
+	open pos
+	let board[pos.fst][pos.snd] <- some(val)
+	board
+
+Cemsort.Board.show(board: Cemsort.Board): String
+	open board
+	let tile_to_str = (t: Maybe<Nat>)
+		case t {
+			none: "---"
+			some: String.pad_left(3, ' ', Nat.show(t.value))
+		}
+
+	let line_to_str = (line: List<Maybe<Nat>>)
+		String.intercalate(" | ", List.map!!(tile_to_str, line)) | "\n"
+
+	String.intercalate("", List.map!!(line_to_str, board))
+
+
+Cemsort.Board.sum_points(board: Cemsort.Board): Nat
+	let board_t  = Cemsort.Board.transpose(board)
+	let sum_rows = List.sum(List.map!!(Cemsort.Board.sum_line, board  ))
+	let sum_cols = List.sum(List.map!!(Cemsort.Board.sum_line, board_t))
+	sum_rows + sum_cols
+
+Cemsort.Board.sum_line(line: List<Maybe<Nat>>): Nat
+	let line = List.map!!((n) Maybe.default!(n, 0), line)
+	if List.is_sorted!(Nat.lte, line) then
+		List.sum(line)
+	else
+		0
+
+// https://stackoverflow.com/questions/2578930/understanding-this-matrix-transposition-function-in-haskell
+// This is segfaulting for some reason!!
+Cemsort.Board.transpose(board: Cemsort.Board): Cemsort.Board
+	let get_line_head = (line: List<Maybe<Nat>>)
+		List.head!(line) <> none
+	let get_line_tail = (line: List<Maybe<Nat>>)
+		List.tail!(line)
+	
+	let get_heads = (board: Cemsort.Board)
+		List.map!!(get_line_head, board)
+	let get_tails = (board: Cemsort.Board)
+		List.map!!(get_line_tail, board)
+
+	case board {
+		nil : []
+		cons: get_heads(board) & Cemsort.Board.transpose(get_tails(board))
+	}
+
+Cemsort.Board.Pos: Type
+	Pair<Nat, Nat>
+
+Cemsort.Board.Pos.read(input: String): Maybe<Cemsort.Board.Pos>
+  let split_input = String.split(input, " ")
+  let nat_parser = Parser.run!(Parser.nat)
+  let maybe_nums = List.map!!(nat_parser, split_input)
+
+  let extract_nums = (mn: Maybe<Nat>) Maybe.default!(mn, 0)
+  let nums = List.map!!(extract_nums, maybe_nums)
+  let x = nums[0] <> 0
+  let y = nums[1] <> 0
+  let pos = {x, y}
+
+  let parse_ok = List.all!(Maybe.is_some!, maybe_nums)
+  let len2 = List.length!(nums) =? 2
+  let valid_pos = Cemsort.Board.Pos.is_valid(pos)
+
+  if parse_ok && len2 && valid_pos then
+    some(pos)
+  else
+    none
+
+Cemsort.Board.Pos.is_valid(pos: Cemsort.Board.Pos): Bool
+	open pos
+	(pos.fst <? Cemsort.Board.size) && (pos.snd <? Cemsort.Board.size)
+
+Cemsort.is_move_valid(state: Cemsort.State, pos: Cemsort.Board.Pos): Bool
+	open pos
+	open state
+	Maybe.is_none!(Cemsort.Board.get(state.board, pos))
+
+List.is_sorted<A: Type>(cmp: A -> A -> Bool, as: List<A>): Bool
+	case as {
+		nil : true
+		cons: case as.tail {
+			nil : true
+			cons: cmp(as.head, as.tail.head) && List.is_sorted<A>(cmp, as.tail)
+		}
+	}
+
+Bool.read_yes_no(s: String, def_val: Bool): Bool
+  switch String.eql(String.to_lower(s)) {
+    "y"  : true
+    "n"  : false
+    "yes": true
+    "no" : false
+  } default def_val
+
+
+kind1_100sort: _
+	IO {
+		// Initialize the state
+		let start_state = Cemsort.State.initial
+	
+		// Play a game
+		get end_state = Cemsort.game_loop(start_state)
+	
+		// Show results
+		open end_state
+		let points = Cemsort.Board.sum_points(end_state.board)
+		IO.print("\nFinal board:")
+		IO.print(Cemsort.Board.show(end_state.board))
+		IO.print("Score: " | Nat.show(points))
+
+		// Ask user if we go again
+		IO.print("\nGo again [y/N]?")
+		get input = IO.get_line
+		let go_again = Bool.read_yes_no(input, false)
+		if go_again then kind1_100sort else IO.end!(unit)
+	}
+
+Cemsort.take_new_number(old_nums: List<Nat>): IO<Nat>
+	IO {
+		get new_num = IO.random(Cemsort.max_num)
+		let new_num = new_num + 1
+		get new_num = 
+			if List.in!(Nat.eql(new_num), old_nums) then
+				Cemsort.take_new_number(old_nums)
+			else IO {
+				return new_num
+			}
+		return new_num
+	}
+
+Cemsort.game_loop(state: Cemsort.State): IO<Cemsort.State>
+	IO {
+		// Tira um numero aleatorio
+		open state
+		get new_num = Cemsort.take_new_number(state.chosen_nums)
+		let state = state@crnt_num <- some(new_num)
+		let state = state@chosen_nums <~ List.cons!(new_num)
+		
+		// Mostrar numero e board
+		open state
+		let num_str = Nat.show(state.crnt_num <> 0)
+		IO.print("Next number: " | num_str)
+		IO.print(Cemsort.Board.show(state.board))
+
+		// Jogador escolhe uma casa vazia
+		get next_tile = Cemsort.get_next_tile(state)
+		open state
+		let state = state@board <- Cemsort.Board.set(state.board, next_tile, new_num)
+		let state = state@turn <~ Nat.succ
+
+		open state
+		get final_state = 
+			if state.turn =? (Cemsort.Board.size * Cemsort.Board.size) then
+				IO {return state}
+			else
+				Cemsort.game_loop(state)
+		return final_state
+	}
+
+Cemsort.get_next_tile(state: Cemsort.State): IO<Cemsort.Board.Pos>
+	IO {
+		IO.print("Choose where to put the number:")
+		get input = IO.get_line
+		let m_pos = Cemsort.Board.Pos.read(input)
+		get pos = case m_pos {
+			none: IO {
+				IO.print("Invalid position")
+				get next_tile = Cemsort.get_next_tile(state)
+				return next_tile
+			}
+			some:
+				if Cemsort.is_move_valid(state, m_pos <> {0,0}) then
+					IO {return m_pos <> {0,0}}
+				else IO {
+					IO.print("Position already filled")
+					get next_tile = Cemsort.get_next_tile(state)
+					return next_tile
+				}
+		}
+		return pos
+	}
