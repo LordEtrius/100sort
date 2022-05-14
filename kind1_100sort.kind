@@ -71,7 +71,6 @@ Cemsort.Board.sum_line(line: List<Maybe<Nat>>): Nat
 		0
 
 // https://stackoverflow.com/questions/2578930/understanding-this-matrix-transposition-function-in-haskell
-// This is segfaulting for some reason!!
 Cemsort.Board.transpose(board: Cemsort.Board): Cemsort.Board
 	let get_line_head = (line: List<Maybe<Nat>>)
 		List.head!(line) <> none
@@ -85,7 +84,10 @@ Cemsort.Board.transpose(board: Cemsort.Board): Cemsort.Board
 
 	case board {
 		nil : []
-		cons: get_heads(board) & Cemsort.Board.transpose(get_tails(board))
+		cons: case board.head {
+			nil  : []
+			cons : get_heads(board) & Cemsort.Board.transpose(get_tails(board))
+		}
 	}
 
 Cemsort.Board.Pos: Type
