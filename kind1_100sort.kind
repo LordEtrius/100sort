@@ -92,24 +92,26 @@ Cemsort.Board.Pos: Type
 	Pair<Nat, Nat>
 
 Cemsort.Board.Pos.read(input: String): Maybe<Cemsort.Board.Pos>
-  let split_input = String.split(input, " ")
-  let nat_parser = Parser.run!(Parser.nat)
-  let maybe_nums = List.map!!(nat_parser, split_input)
+	let split_input = String.split(input, " ")
+	let nat_parser = Parser.run!(Parser.nat)
+	let maybe_nums = List.map!!(nat_parser, split_input)
 
-  let extract_nums = (mn: Maybe<Nat>) Maybe.default!(mn, 0)
-  let nums = List.map!!(extract_nums, maybe_nums)
-  let x = nums[0] <> 0
-  let y = nums[1] <> 0
-  let pos = {x, y}
+	let extract_nums = (mn: Maybe<Nat>) Maybe.default!(mn, 0)
+	let nums = List.map!!(extract_nums, maybe_nums)
+	let x = nums[0] <> 0
+	let y = nums[1] <> 0
+	// The first board position is "1 1"
+	// internally it is converted to {0, 0}
+	let pos = {x-1, y-1}
 
-  let parse_ok = List.all!(Maybe.is_some!, maybe_nums)
-  let len2 = List.length!(nums) =? 2
-  let valid_pos = Cemsort.Board.Pos.is_valid(pos)
+	let parse_ok = List.all!(Maybe.is_some!, maybe_nums)
+	let len2 = List.length!(nums) =? 2
+	let valid_pos = Cemsort.Board.Pos.is_valid(pos)
 
-  if parse_ok && len2 && valid_pos then
-    some(pos)
-  else
-    none
+	if parse_ok && len2 && valid_pos then
+		some(pos)
+	else
+		none
 
 Cemsort.Board.Pos.is_valid(pos: Cemsort.Board.Pos): Bool
 	open pos
