@@ -22,27 +22,27 @@ Cemsort.State.initial: Cemsort.State
 	)
 
 Cemsort.Board: Type
-	List<List<Maybe<Nat>>>
+	List<List<Nat>>
 
 Cemsort.Board.initial: Cemsort.Board
 	List.build!(
 		Cemsort.Board.size,
-		List.build!(Cemsort.Board.size, Maybe.none<Nat>)
+		List.build!(Cemsort.Board.size, 0)
 	)
 
-Cemsort.Board.get(board: Cemsort.Board, pos: Cemsort.Board.Pos): Maybe<Nat>
+Cemsort.Board.get(board: Cemsort.Board, pos: Cemsort.Board.Pos): Nat
 	open pos
-	board[pos.fst][pos.snd] <> none
+	board[pos.fst][pos.snd] <> 0
 
-Cemsort.Board.get_row(board: Cemsort.Board, row_idx: Nat): List<Maybe<Nat>>
-	let get_next_elem = (col_idx: Nat, row: List<Maybe<Nat>>)
+Cemsort.Board.get_row(board: Cemsort.Board, row_idx: Nat): List<Nat>
+	let get_next_elem = (col_idx: Nat, row: List<Nat>)
 		Cemsort.Board.get(board, {col_idx, row_idx}) & row
 
 	let row = Nat.for!([], 0, Cemsort.Board.size, get_next_elem)
 	row
 
-Cemsort.Board.get_col(board: Cemsort.Board, col_idx: Nat): List<Maybe<Nat>>
-	let get_next_elem = (row_idx: Nat, col: List<Maybe<Nat>>)
+Cemsort.Board.get_col(board: Cemsort.Board, col_idx: Nat): List<Nat>
+	let get_next_elem = (row_idx: Nat, col: List<Nat>)
 		Cemsort.Board.get(board, {col_idx, row_idx}) & col
 
 	let col = Nat.for!([], 0, Cemsort.Board.size, get_next_elem)
@@ -54,18 +54,18 @@ Cemsort.Board.set(
 	val: Nat
 ): Cemsort.Board
 	open pos
-	let board[pos.fst][pos.snd] <- some(val)
+	let board[pos.fst][pos.snd] <- val
 	board
 
 Cemsort.Board.show(board: Cemsort.Board): String
 	open board
-	let tile_to_str = (t: Maybe<Nat>)
+	let tile_to_str = (t: Nat)
 		case t {
-			none: "---"
-			some: String.pad_left(3, ' ', Nat.show(t.value))
+			zero: "---"
+			succ: String.pad_left(3, ' ', Nat.show(t))
 		}
 
-	let line_to_str = (line: List<Maybe<Nat>>)
+	let line_to_str = (line: List<Nat>)
 		String.intercalate(" | ", List.map!!(tile_to_str, line)) | "\n"
 
 	String.intercalate("", List.map!!(line_to_str, board))
@@ -81,8 +81,7 @@ Cemsort.Board.sum_points(board: Cemsort.Board): Nat
 	let sum_cols = Nat.for!(0, 0, Cemsort.Board.size, add_col)
 	sum_rows + sum_cols
 
-Cemsort.Board.sum_line(line: List<Maybe<Nat>>): Nat
-	let line = List.map!!((n) Maybe.default!(n, 0), line)
+Cemsort.Board.sum_line(line: List<Nat>): Nat
 	if List.is_sorted!(Nat.lte, line) then
 		List.sum(line)
 	else
@@ -96,15 +95,16 @@ Cemsort.Board.Pos.read(input: String): Maybe<Cemsort.Board.Pos>
 	let nat_parser = Parser.run!(Parser.nat)
 	let maybe_nums = List.map!!(nat_parser, split_input)
 
-	let extract_nums = (mn: Maybe<Nat>) Maybe.default!(mn, 0)
-	let nums = List.map!!(extract_nums, maybe_nums)
+	let extract_num = (mn: Maybe<Nat>) mn <> 0
+	let nums = List.map!!(extract_num, maybe_nums)
 	let x = nums[0] <> 0
 	let y = nums[1] <> 0
 	// The first board position is "1 1"
 	// internally it is converted to {0, 0}
 	let pos = {x-1, y-1}
 
-	let parse_ok = List.all!(Maybe.is_some!, maybe_nums)
+	let parse_ok =
+		List.all!(Maybe.is_some!, maybe_nums) && (x >? 0) && (y >? 0)
 	let len2 = List.length!(nums) =? 2
 	let valid_pos = Cemsort.Board.Pos.is_valid(pos)
 
@@ -120,7 +120,7 @@ Cemsort.Board.Pos.is_valid(pos: Cemsort.Board.Pos): Bool
 Cemsort.is_move_valid(state: Cemsort.State, pos: Cemsort.Board.Pos): Bool
 	open pos
 	open state
-	Maybe.is_none!(Cemsort.Board.get(state.board, pos))
+	Cemsort.Board.get(state.board, pos) =? 0
 
 List.is_sorted<A: Type>(cmp: A -> A -> Bool, as: List<A>): Bool
 	case as {
