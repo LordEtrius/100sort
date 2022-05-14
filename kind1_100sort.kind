@@ -34,6 +34,20 @@ Cemsort.Board.get(board: Cemsort.Board, pos: Cemsort.Board.Pos): Maybe<Nat>
 	open pos
 	board[pos.fst][pos.snd] <> none
 
+Cemsort.Board.get_row(board: Cemsort.Board, row_idx: Nat): List<Maybe<Nat>>
+	let get_next_elem = (col_idx: Nat, row: List<Maybe<Nat>>)
+		Cemsort.Board.get(board, {col_idx, row_idx}) & row
+
+	let row = Nat.for!([], 0, Cemsort.Board.size, get_next_elem)
+	row
+
+Cemsort.Board.get_col(board: Cemsort.Board, col_idx: Nat): List<Maybe<Nat>>
+	let get_next_elem = (row_idx: Nat, col: List<Maybe<Nat>>)
+		Cemsort.Board.get(board, {col_idx, row_idx}) & col
+
+	let col = Nat.for!([], 0, Cemsort.Board.size, get_next_elem)
+	col
+
 Cemsort.Board.set(
 	board: Cemsort.Board,
 	pos: Cemsort.Board.Pos,
@@ -58,9 +72,13 @@ Cemsort.Board.show(board: Cemsort.Board): String
 
 
 Cemsort.Board.sum_points(board: Cemsort.Board): Nat
-	let board_t  = Cemsort.Board.transpose(board)
-	let sum_rows = List.sum(List.map!!(Cemsort.Board.sum_line, board  ))
-	let sum_cols = List.sum(List.map!!(Cemsort.Board.sum_line, board_t))
+	let add_row = (idx: Nat, sum: Nat)
+		sum + Cemsort.Board.sum_line(Cemsort.Board.get_row(board, idx))
+	let add_col = (idx: Nat, sum: Nat)
+		sum + Cemsort.Board.sum_line(Cemsort.Board.get_col(board, idx))
+
+	let sum_rows = Nat.for!(0, 0, Cemsort.Board.size, add_row)
+	let sum_cols = Nat.for!(0, 0, Cemsort.Board.size, add_col)
 	sum_rows + sum_cols
 
 Cemsort.Board.sum_line(line: List<Maybe<Nat>>): Nat
@@ -69,26 +87,6 @@ Cemsort.Board.sum_line(line: List<Maybe<Nat>>): Nat
 		List.sum(line)
 	else
 		0
-
-// https://stackoverflow.com/questions/2578930/understanding-this-matrix-transposition-function-in-haskell
-Cemsort.Board.transpose(board: Cemsort.Board): Cemsort.Board
-	let get_line_head = (line: List<Maybe<Nat>>)
-		List.head!(line) <> none
-	let get_line_tail = (line: List<Maybe<Nat>>)
-		List.tail!(line)
-	
-	let get_heads = (board: Cemsort.Board)
-		List.map!!(get_line_head, board)
-	let get_tails = (board: Cemsort.Board)
-		List.map!!(get_line_tail, board)
-
-	case board {
-		nil : []
-		cons: case board.head {
-			nil  : []
-			cons : get_heads(board) & Cemsort.Board.transpose(get_tails(board))
-		}
-	}
 
 Cemsort.Board.Pos: Type
 	Pair<Nat, Nat>
