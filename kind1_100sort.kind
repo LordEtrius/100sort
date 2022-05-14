@@ -1,5 +1,5 @@
 Cemsort.max_num: Nat
-	100
+	99
 
 Cemsort.Board.size: Nat
 	5
