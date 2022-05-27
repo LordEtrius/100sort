@@ -1,92 +1,173 @@
 Cemsort.max_num: Nat
 	99
 
-Cemsort.Board.size: Nat
-	5
-
+// ----------- Cemsort state -------------
 type Cemsort.State {
 	new(
 		board: Cemsort.Board
-		chosen_nums: List<Nat>
-		turn: Nat
-		crnt_num: Maybe<Nat>
+		crnt_num: Cemsort.Tile
+		turn: Cemsort.State.Turn
 	)
 }
 
 Cemsort.State.initial: Cemsort.State
-	Cemsort.State.new(
-		Cemsort.Board.initial,
-		List.nil<Nat>,
-		0,
-		Maybe.none<Nat>
-	)
+	Cemsort.State.new(Cemsort.Board.initial, Cemsort.Tile.empty, Cemsort.State.Turn.start)
+
+Cemsort.State.is_move_valid(state: Cemsort.State, pos: Cemsort.Board.Pos): Bool
+	open state
+	let tile = Cemsort.Board.get(state.board, pos)
+	Cemsort.Tile.is_empty(tile)
+
+Cemsort.State.Turn.length: Nat
+	Nat.succ(Nat.log(2, Cemsort.Board.num_tiles)) // log truncates
+
+Cemsort.State.Turn: Type
+	Word(Cemsort.State.Turn.length)
+
+Cemsort.State.Turn.end: Cemsort.State.Turn
+	Nat.to_word(Cemsort.State.Turn.length, Cemsort.Board.num_tiles)
+
+Cemsort.State.Turn.start: Cemsort.State.Turn
+	Word.zero(Cemsort.State.Turn.length)
+
+Cemsort.State.Turn.eql(a: Cemsort.State.Turn, b: Cemsort.State.Turn): Bool
+	Word.eql<Cemsort.State.Turn.length>(a, b)
+
+// ----------- Cemsort tile -------------
+Cemsort.Tile: Type
+	Word(Cemsort.Tile.length)
+
+Cemsort.Tile.length: Nat
+	Nat.succ(Nat.log(2, Cemsort.max_num))  // log truncates
+
+Cemsort.Tile.empty: Cemsort.Tile
+	Nat.to_word(Cemsort.Tile.length, 0)
+
+Cemsort.Tile.show(tile: Cemsort.Tile): String
+	if Cemsort.Tile.is_empty(tile) then
+		"---"
+	else
+		String.pad_left(3, ' ', Word.show<Cemsort.Tile.length>(tile))
+
+Cemsort.Tile.is_empty(tile: Cemsort.Tile): Bool
+	Word.is_zero<Cemsort.Tile.length>(tile)
+
+
+// ----------- Cemsort board -------------
+Cemsort.Board.num_rows: Nat
+	5
+
+Cemsort.Board.num_tiles: Nat
+	Cemsort.Board.num_rows * Cemsort.Board.num_rows
+
+Cemsort.Board.length: Nat
+	Cemsort.Board.num_tiles * Cemsort.Tile.length
 
 Cemsort.Board: Type
-	List<List<Nat>>
+	Word(Cemsort.Board.length)
 
 Cemsort.Board.initial: Cemsort.Board
-	List.build!(
-		Cemsort.Board.size,
-		List.build!(Cemsort.Board.size, 0)
-	)
+	Word.zero(Cemsort.Board.length)
 
-Cemsort.Board.get(board: Cemsort.Board, pos: Cemsort.Board.Pos): Nat
+Cemsort.Board.get(board: Cemsort.Board, pos: Cemsort.Board.Pos): Cemsort.Tile
 	open pos
-	board[pos.fst][pos.snd] <> 0
+	let start_tile = ((Cemsort.Board.num_rows * pos.snd) + pos.fst)
+	let start_bit = start_tile * Cemsort.Tile.length
 
-Cemsort.Board.get_row(board: Cemsort.Board, row_idx: Nat): List<Nat>
-	let get_next_elem = (col_idx: Nat, row: List<Nat>)
-		Cemsort.Board.get(board, {col_idx, row_idx}) & row
+	let board_bits = Word.to_bits<Cemsort.Board.length>(board)
+	let board_tail = Bits.drop(start_bit, board_bits)
+	let tile = Bits.take(Cemsort.Tile.length, board_tail)
+	Word.from_bits(Cemsort.Tile.length, tile)
 
-	let row = Nat.for!([], 0, Cemsort.Board.size, get_next_elem)
-	row
+Cemsort.Board.get_row(board: Cemsort.Board, row_idx: Nat): List<Cemsort.Tile>
+	Nat.for<List<Cemsort.Tile> -> List<Cemsort.Tile>>(
+		(r: List<Cemsort.Tile>) r, // Using lambdas to insert at list end
+		0,
+		Cemsort.Board.num_rows,
+		Cemsort.Board.get_line_aux(board, row_idx)
+	)(List.nil<Cemsort.Tile>)
 
-Cemsort.Board.get_col(board: Cemsort.Board, col_idx: Nat): List<Nat>
-	let get_next_elem = (row_idx: Nat, col: List<Nat>)
-		Cemsort.Board.get(board, {col_idx, row_idx}) & col
+Cemsort.Board.get_col(board: Cemsort.Board, col_idx: Nat): List<Cemsort.Tile>
+	let get_line = (row_idx: Nat, row: List<Cemsort.Tile> -> List<Cemsort.Tile>)
+		Cemsort.Board.get_line_aux(board, row_idx, col_idx, row)
+	Nat.for<List<Cemsort.Tile> -> List<Cemsort.Tile>>(
+		(r: List<Cemsort.Tile>) r,
+		0,
+		Cemsort.Board.num_rows,
+		get_line
+	)(List.nil<Cemsort.Tile>)
 
-	let col = Nat.for!([], 0, Cemsort.Board.size, get_next_elem)
-	col
+Cemsort.Board.get_line_aux(
+	board: Cemsort.Board, row_idx: Nat, col_idx: Nat, row: List<Cemsort.Tile> -> List<Cemsort.Tile>
+): List<Cemsort.Tile> -> List<Cemsort.Tile>
+	(rr: List<Cemsort.Tile>) row(
+		List.cons<Cemsort.Tile>(
+			Cemsort.Board.get(board, Pair.new<Nat, Nat>(col_idx, row_idx)),
+			rr
+		)
+	)
 
 Cemsort.Board.set(
 	board: Cemsort.Board,
 	pos: Cemsort.Board.Pos,
-	val: Nat
+	val: Cemsort.Tile
 ): Cemsort.Board
 	open pos
-	let board[pos.fst][pos.snd] <- val
-	board
+	let start_tile = ((Cemsort.Board.num_rows * pos.snd) + pos.fst)
+	let start_bit = start_tile * Cemsort.Tile.length
+	let board_b = Word.to_bits<Cemsort.Board.length>(board)
+	let tile_b =  Word.to_bits<Cemsort.Tile.length>(val)
+	let {start, aux} = Bits.split(start_bit, board_b)
+	let {old , end} = Bits.split(Cemsort.Tile.length, aux)
+	let new_board = Bits.concat(start, Bits.concat(tile_b, end))
+	Word.from_bits(Cemsort.Board.length, new_board)
+
+Cemsort.Board.show_row(board: Cemsort.Board, row_idx: Nat): String
+	let row = Cemsort.Board.get_row(board, row_idx)
+	let str_row = List.map!!(Cemsort.Tile.show, row)
+	String.intercalate(" | ", str_row)
 
 Cemsort.Board.show(board: Cemsort.Board): String
-	open board
-	let tile_to_str = (t: Nat)
-		case t {
-			zero: "---"
-			succ: String.pad_left(3, ' ', Nat.show(t))
-		}
-
-	let line_to_str = (line: List<Nat>)
-		String.intercalate(" | ", List.map!!(tile_to_str, line)) | "\n"
-
-	String.intercalate("", List.map!!(line_to_str, board))
-
+	let add_row = (idx, acc) acc | Cemsort.Board.show_row(board, idx) | "\n"
+	Nat.for<String>("", 0, Cemsort.Board.num_rows, add_row)
 
 Cemsort.Board.sum_points(board: Cemsort.Board): Nat
-	let add_row = (idx: Nat, sum: Nat)
-		sum + Cemsort.Board.sum_line(Cemsort.Board.get_row(board, idx))
-	let add_col = (idx: Nat, sum: Nat)
-		sum + Cemsort.Board.sum_line(Cemsort.Board.get_col(board, idx))
-
-	let sum_rows = Nat.for!(0, 0, Cemsort.Board.size, add_row)
-	let sum_cols = Nat.for!(0, 0, Cemsort.Board.size, add_col)
+	let add_row = Cemsort.Board.sum_aux(board, Cemsort.Board.get_row)
+	let add_col = Cemsort.Board.sum_aux(board, Cemsort.Board.get_col)
+	let sum_rows = Nat.for<Nat>(0, 0, Cemsort.Board.num_rows, add_row)
+	let sum_cols = Nat.for<Nat>(0, 0, Cemsort.Board.num_rows, add_col)
 	sum_rows + sum_cols
 
-Cemsort.Board.sum_line(line: List<Nat>): Nat
-	if List.is_sorted!(Nat.lte, line) then
-		List.sum(line)
+Cemsort.Board.sum_aux(
+	board: Cemsort.Board,
+	get_line: Cemsort.Board -> Nat -> List<Cemsort.Tile>,
+	idx: Nat,
+	sum: Nat
+): Nat
+	sum + Cemsort.Board.sum_line(get_line(board, idx))
+
+Cemsort.Board.sum_line(line: List<Cemsort.Tile>): Nat
+	let acc_tile = (tile: Cemsort.Tile, acc: Nat)
+		acc + Word.to_nat<Cemsort.Tile.length>(tile)
+	let sorted =
+		List.is_sorted<Cemsort.Tile>(
+			Word.lte<Cemsort.Tile.length>, line
+		)
+	if sorted then
+		List.foldl<Cemsort.Tile, Nat>(0, acc_tile, line)
 	else
 		0
 
+Cemsort.Board.contains(board: Cemsort.Board, num: Cemsort.Tile): Bool
+	let row_contains = (row: List<Cemsort.Tile>)
+		List.in<Cemsort.Tile>(Word.eql<Cemsort.Tile.length>(num), row)
+	let add_row = (idx: Nat, found: Bool)
+		found || row_contains(Cemsort.Board.get_row(board, idx))
+	let found = false
+	Nat.for<Bool>(false, 0, Cemsort.Board.num_rows, add_row)
+
+
+// ----------- Cemsort board position -------------
 Cemsort.Board.Pos: Type
 	Pair<Nat, Nat>
 
@@ -97,8 +178,8 @@ Cemsort.Board.Pos.read(input: String): Maybe<Cemsort.Board.Pos>
 
 	let extract_num = (mn: Maybe<Nat>) mn <> 0
 	let nums = List.map!!(extract_num, maybe_nums)
-	let x = nums[0] <> 0
-	let y = nums[1] <> 0
+	let y = nums[0] <> 0
+	let x = nums[1] <> 0
 	// The first board position is "1 1"
 	// internally it is converted to {0, 0}
 	let pos = {x-1, y-1}
@@ -115,30 +196,53 @@ Cemsort.Board.Pos.read(input: String): Maybe<Cemsort.Board.Pos>
 
 Cemsort.Board.Pos.is_valid(pos: Cemsort.Board.Pos): Bool
 	open pos
-	(pos.fst <? Cemsort.Board.size) && (pos.snd <? Cemsort.Board.size)
+	(pos.fst <? Cemsort.Board.num_rows) && (pos.snd <? Cemsort.Board.num_rows)
 
-Cemsort.is_move_valid(state: Cemsort.State, pos: Cemsort.Board.Pos): Bool
-	open pos
-	open state
-	Cemsort.Board.get(state.board, pos) =? 0
+
+// ----------- Aux functions -------------
+
+Bool.read_yes_no(s: String, def_val: Bool): Bool
+	switch String.eql(String.to_lower(s)) {
+		"y"  : true
+		"n"  : false
+		"yes": true
+		"no" : false
+	} default def_val
 
 List.is_sorted<A: Type>(cmp: A -> A -> Bool, as: List<A>): Bool
 	case as {
-		nil : true
+		nil : true                                  // Empty is sorted
 		cons: case as.tail {
-			nil : true
-			cons: cmp(as.head, as.tail.head) && List.is_sorted<A>(cmp, as.tail)
+			nil : true                                // Single element is sorted
+			cons: case cmp(as.head, as.tail.head) {   // Compare first two elements
+				false: false                            // Found unsorted pair, stop
+				true : List.is_sorted<A>(cmp, as.tail)  // Found sorted pair, recurse
+			}
 		}
 	}
 
-Bool.read_yes_no(s: String, def_val: Bool): Bool
-  switch String.eql(String.to_lower(s)) {
-    "y"  : true
-    "n"  : false
-    "yes": true
-    "no" : false
-  } default def_val
+// Returns a pair with the first n bits and the remaining 
+Bits.split(n: Nat, bits: Bits): Pair<Bits, Bits>
+	Bits.split.go(bits, (b) b, n)
 
+Bits.split.go(a: Bits, b: Bits -> Bits, n: Nat): Pair<Bits, Bits>
+	case n {
+		zero : {b(Bits.e), a}
+		succ : case a {
+			e: {b(Bits.e), a}
+			o: Bits.split.go(a.pred, (bb) b(Bits.o(bb)), n.pred)
+			i: Bits.split.go(a.pred, (bb) b(Bits.i(bb)), n.pred)
+		}
+	}
+
+Word.to_string<len: Nat>(w: Word(len)): String
+	case w {
+		e: "#"
+		o: "0" | Word.to_string<w.size>(w.pred)
+		i: "1" | Word.to_string<w.size>(w.pred)
+	}
+
+// ----------- Game logic -------------
 
 kind1_100sort: _
 	IO {
@@ -162,30 +266,15 @@ kind1_100sort: _
 		if go_again then kind1_100sort else IO.end!(unit)
 	}
 
-Cemsort.take_new_number(old_nums: List<Nat>): IO<Nat>
-	IO {
-		get new_num = IO.random(Cemsort.max_num)
-		let new_num = new_num + 1
-		get new_num = 
-			if List.in!(Nat.eql(new_num), old_nums) then
-				Cemsort.take_new_number(old_nums)
-			else IO {
-				return new_num
-			}
-		return new_num
-	}
-
 Cemsort.game_loop(state: Cemsort.State): IO<Cemsort.State>
 	IO {
 		// Tira um numero aleatorio
-		open state
-		get new_num = Cemsort.take_new_number(state.chosen_nums)
-		let state = state@crnt_num <- some(new_num)
-		let state = state@chosen_nums <~ List.cons!(new_num)
+		get new_num = Cemsort.take_new_number(state)
+		let state = state@crnt_num <- new_num
 		
 		// Mostrar numero e board
 		open state
-		let num_str = Nat.show(state.crnt_num <> 0)
+		let num_str = Cemsort.Tile.show(state.crnt_num)
 		IO.print("Next number: " | num_str)
 		IO.print(Cemsort.Board.show(state.board))
 
@@ -193,20 +282,35 @@ Cemsort.game_loop(state: Cemsort.State): IO<Cemsort.State>
 		get next_tile = Cemsort.get_next_tile(state)
 		open state
 		let state = state@board <- Cemsort.Board.set(state.board, next_tile, new_num)
-		let state = state@turn <~ Nat.succ
+		let state = state@turn <~ Word.inc<Cemsort.State.Turn.length>
 
 		open state
 		get final_state = 
-			if state.turn =? (Cemsort.Board.size * Cemsort.Board.size) then
+			if state.turn =? Cemsort.State.Turn.end then
 				IO {return state}
 			else
 				Cemsort.game_loop(state)
 		return final_state
 	}
 
+Cemsort.take_new_number(state: Cemsort.State): IO<Cemsort.Tile>
+	IO {
+		open state
+		get new_num = IO.random(Cemsort.max_num)
+		let new_num = new_num + 1
+		let new_num = Nat.to_word(Cemsort.Tile.length, new_num)
+		get new_num = 
+			if Cemsort.Board.contains(state.board, new_num) then
+				Cemsort.take_new_number(state)
+			else IO {
+				return new_num
+			}
+		return new_num
+	}
+
 Cemsort.get_next_tile(state: Cemsort.State): IO<Cemsort.Board.Pos>
 	IO {
-		IO.print("Choose where to put the number:")
+		IO.print("Choose where to put the number (row col):")
 		get input = IO.get_line
 		let m_pos = Cemsort.Board.Pos.read(input)
 		get pos = case m_pos {
@@ -216,7 +320,7 @@ Cemsort.get_next_tile(state: Cemsort.State): IO<Cemsort.Board.Pos>
 				return next_tile
 			}
 			some:
-				if Cemsort.is_move_valid(state, m_pos <> {0,0}) then
+				if Cemsort.State.is_move_valid(state, m_pos <> {0,0}) then
 					IO {return m_pos <> {0,0}}
 				else IO {
 					IO.print("Position already filled")
