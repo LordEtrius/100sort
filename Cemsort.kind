@@ -1,0 +1,416 @@
+App.Cemsort.State: App.State
+	App.State.new(App.Cemsort.Local, Unit)
+
+type App.Cemsort.Local {
+	new(
+		board: App.Cemsort.Board
+		crnt_num: App.Cemsort.Tile
+		turn: App.Cemsort.State.Turn
+    seed: Nat
+	)
+}
+
+App.Cemsort.max_num: Nat
+	99
+
+App.Cemsort.State.is_move_valid(local: App.Cemsort.Local, pos: App.Cemsort.Board.Pos): Bool
+	open local
+	let tile = App.Cemsort.Board.get(local.board, pos)
+	App.Cemsort.Tile.is_empty(tile)
+
+App.Cemsort.State.Turn.length: Nat
+	Nat.succ(Nat.log(2, App.Cemsort.Board.num_tiles)) // log truncates
+
+App.Cemsort.State.Turn: Type
+	Word(App.Cemsort.State.Turn.length)
+
+App.Cemsort.State.Turn.end: App.Cemsort.State.Turn
+	Nat.to_word(App.Cemsort.State.Turn.length, App.Cemsort.Board.num_tiles)
+
+App.Cemsort.State.Turn.start: App.Cemsort.State.Turn
+	Word.zero(App.Cemsort.State.Turn.length)
+
+App.Cemsort.State.Turn.eql(a: App.Cemsort.State.Turn, b: App.Cemsort.State.Turn): Bool
+	Word.eql<App.Cemsort.State.Turn.length>(a, b)
+
+// ----------- App.Cemsort tile -------------
+App.Cemsort.Tile: Type
+	Word(App.Cemsort.Tile.length)
+
+App.Cemsort.Tile.length: Nat
+	Nat.succ(Nat.log(2, App.Cemsort.max_num))  // log truncates
+
+App.Cemsort.Tile.show(tile: App.Cemsort.Tile): String
+	if App.Cemsort.Tile.is_empty(tile) then
+		"---"
+	else
+		String.pad_left(3, ' ', Word.show<App.Cemsort.Tile.length>(tile))
+
+App.Cemsort.Tile.empty: App.Cemsort.Tile
+	Nat.to_word(App.Cemsort.Tile.length, 0)
+
+App.Cemsort.Tile.is_empty(tile: App.Cemsort.Tile): Bool
+	Word.is_zero<App.Cemsort.Tile.length>(tile)
+
+App.Cemsort.take_new_number(state: App.Cemsort.Local, seed: Nat): App.Cemsort.Tile
+  open state
+  let new_num = (seed % App.Cemsort.max_num) + 1  
+  log(Nat.show(new_num))
+  let new_num = Nat.to_word(App.Cemsort.Tile.length, new_num)
+  let new_num = 
+    if App.Cemsort.Board.contains(state.board, new_num) then
+      App.Cemsort.take_new_number(state, Nat.random(seed))
+    else 
+      new_num
+  new_num
+	
+
+// ----------- Cemsort board -------------
+App.Cemsort.Board.num_rows: Nat
+	5
+
+App.Cemsort.Board.num_tiles: Nat
+App.Cemsort.Board.num_rows * App.Cemsort.Board.num_rows
+
+App.Cemsort.Board.length: Nat
+App.Cemsort.Board.num_tiles * App.Cemsort.Tile.length
+
+App.Cemsort.Board: Type
+Word(App.Cemsort.Board.length)
+
+App.Cemsort.Board.initial: App.Cemsort.Board
+Word.zero(App.Cemsort.Board.length)
+
+App.Cemsort.Board.get(board: App.Cemsort.Board, pos: App.Cemsort.Board.Pos): App.Cemsort.Tile
+	open pos
+let start_tile = ((App.Cemsort.Board.num_rows * pos.snd) + pos.fst)
+let start_bit = start_tile * App.Cemsort.Tile.length
+
+let board_bits = N_to_bits<App.Cemsort.Board.length>(board)
+let board_tail = Bits.drop(start_bit, board_bits)
+let tile = Bits.take(App.Cemsort.Tile.length, board_tail)
+Word.from_bits(App.Cemsort.Tile.length, tile)
+
+App.Cemsort.Board.get_row(board: App.Cemsort.Board, row_idx: Nat): List<App.Cemsort.Tile>
+Nat.for<List<App.Cemsort.Tile> -> List<App.Cemsort.Tile>>(
+  (r: List<App.Cemsort.Tile>) r, // Using lambdas to insert at list end
+		0,
+  App.Cemsort.Board.num_rows,
+  App.Cemsort.Board.get_line_aux(board, row_idx)
+)(List.nil<App.Cemsort.Tile>)
+
+App.Cemsort.Board.get_col(board: App.Cemsort.Board, col_idx: Nat): List<App.Cemsort.Tile>
+let get_line = (row_idx: Nat, row: List<App.Cemsort.Tile> -> List<App.Cemsort.Tile>)
+  App.Cemsort.Board.get_line_aux(board, row_idx, col_idx, row)
+Nat.for<List<App.Cemsort.Tile> -> List<App.Cemsort.Tile>>(
+  (r: List<App.Cemsort.Tile>) r,
+		0,
+  App.Cemsort.Board.num_rows,
+		get_line
+)(List.nil<App.Cemsort.Tile>)
+
+App.Cemsort.Board.get_line_aux(
+board: App.Cemsort.Board, row_idx: Nat, col_idx: Nat, row: List<App.Cemsort.Tile> -> List<App.Cemsort.Tile>
+): List<App.Cemsort.Tile> -> List<App.Cemsort.Tile>
+(rr: List<App.Cemsort.Tile>) row(
+  List.cons<App.Cemsort.Tile>(
+   App.Cemsort.Board.get(board, Pair.new<Nat, Nat>(col_idx, row_idx)),
+			rr
+		)
+	)
+
+
+N_to_bits<size: Nat>(a: Word(size)): Bits
+  N_to_bits.go<size>(a, Bits.e)
+
+N_to_bits.go<size: Nat>(a: Word(size), acc: Bits): Bits
+  case a {
+    e: acc
+    o: N_to_bits.go<a.size>(a.pred, Bits.concat(acc, Bits.o(Bits.e)))
+    i: N_to_bits.go<a.size>(a.pred, Bits.concat(acc, Bits.i(Bits.e)))
+  }
+
+App.Cemsort.Board.set(
+board: App.Cemsort.Board,
+pos: App.Cemsort.Board.Pos,
+val: App.Cemsort.Tile
+): App.Cemsort.Board
+	open pos
+  let start_tile = ((App.Cemsort.Board.num_rows * pos.snd) + pos.fst)
+  let start_bit = start_tile * App.Cemsort.Tile.length
+  let board_b = N_to_bits<App.Cemsort.Board.length>(board)
+  log("Board: " | Bits.show(board_b))
+  let tile_b  = N_to_bits<App.Cemsort.Tile.length>(val)
+  log("tile: " | Bits.show(tile_b))
+  let {start, aux} = Bits.split(start_bit, board_b)
+  let {old , end} = Bits.split(App.Cemsort.Tile.length, aux)
+  let new_board = Bits.concat(start, Bits.concat(tile_b, end))
+  log("new_board: " | Bits.show(board_b))
+  Word.from_bits<App.Cemsort.Board.length>(new_board)
+  
+
+App.Cemsort.Board.sum_points(board: App.Cemsort.Board): Nat
+let add_row = App.Cemsort.Board.sum_aux(board, App.Cemsort.Board.get_row)
+let add_col = App.Cemsort.Board.sum_aux(board, App.Cemsort.Board.get_col)
+let sum_rows = Nat.for<Nat>(0, 0, App.Cemsort.Board.num_rows, add_row)
+let sum_cols = Nat.for<Nat>(0, 0, App.Cemsort.Board.num_rows, add_col)
+	sum_rows + sum_cols
+
+App.Cemsort.Board.sum_aux(
+board: App.Cemsort.Board,
+get_line: App.Cemsort.Board -> Nat -> List<App.Cemsort.Tile>,
+	idx: Nat,
+	sum: Nat
+): Nat
+sum + App.Cemsort.Board.sum_line(get_line(board, idx))
+
+App.Cemsort.Board.sum_line(line: List<App.Cemsort.Tile>): Nat
+let acc_tile = (tile: App.Cemsort.Tile, acc: Nat)
+  acc + Word.to_nat<App.Cemsort.Tile.length>(tile)
+	let sorted =
+  List.is_sorted<App.Cemsort.Tile>(
+    Word.lte<App.Cemsort.Tile.length>, line
+		)
+	if sorted then
+  List.foldl<App.Cemsort.Tile, Nat>(0, acc_tile, line)
+	else
+		0
+
+App.Cemsort.Board.contains(board: App.Cemsort.Board, num: App.Cemsort.Tile): Bool
+let row_contains = (row: List<App.Cemsort.Tile>)
+  List.in<App.Cemsort.Tile>(Word.eql<App.Cemsort.Tile.length>(num), row)
+	let add_row = (idx: Nat, found: Bool)
+  found || row_contains(App.Cemsort.Board.get_row(board, idx))
+	let found = false
+Nat.for<Bool>(false, 0, App.Cemsort.Board.num_rows, add_row)
+
+App.Cemsort.Board.show_row(board: App.Cemsort.Board, row_idx: Nat): String
+	let row = App.Cemsort.Board.get_row(board, row_idx)
+	let str_row = List.map!!(App.Cemsort.Tile.show, row)
+	String.intercalate(" | ", str_row)
+
+App.Cemsort.Board.show(board: App.Cemsort.Board): String
+	let add_row = (idx, acc) acc | App.Cemsort.Board.show_row(board, idx) | "\n"
+	Nat.for<String>("", 0, App.Cemsort.Board.num_rows, add_row)
+
+
+// ----------- App.Cemsort board position -------------
+App.Cemsort.Board.Pos: Type
+	Pair<Nat, Nat>
+
+App.Cemsort.Board.Pos.read(input: String): Maybe<App.Cemsort.Board.Pos>
+	let split_input = String.split(input, " ")
+	let nat_parser = Parser.run!(Parser.nat)
+	let maybe_nums = List.map!!(nat_parser, split_input)
+
+	let extract_num = (mn: Maybe<Nat>) mn <> 0
+	let nums = List.map!!(extract_num, maybe_nums)
+	let y = nums[0] <> 0
+	let x = nums[1] <> 0
+	// The first board position is "1 1"
+	// internally it is converted to {0, 0}
+	let pos = {x-1, y-1}
+
+	let parse_ok =
+		List.all!(Maybe.is_some!, maybe_nums) && (x >? 0) && (y >? 0)
+	let len2 = List.length!(nums) =? 2
+let valid_pos = App.Cemsort.Board.Pos.is_valid(pos)
+
+	if parse_ok && len2 && valid_pos then
+		some(pos)
+	else
+		none
+
+App.Cemsort.Board.Pos.is_valid(pos: App.Cemsort.Board.Pos): Bool
+	open pos
+(pos.fst <? App.Cemsort.Board.num_rows) && (pos.snd <? App.Cemsort.Board.num_rows)
+
+
+// ----------- Aux functions -------------
+
+List.is_sorted<A: Type>(cmp: A -> A -> Bool, as: List<A>): Bool
+	case as {
+		nil : true                                  // Empty is sorted
+		cons: case as.tail {
+			nil : true                                // Single element is sorted
+			cons: case cmp(as.head, as.tail.head) {   // Compare first two elements
+				false: false                            // Found unsorted pair, stop
+				true : List.is_sorted<A>(cmp, as.tail)  // Found sorted pair, recurse
+			}
+		}
+	}
+
+// Returns a pair with the first n bits and the remaining 
+Bits.split(n: Nat, bits: Bits): Pair<Bits, Bits>
+	Bits.split.go(bits, (b) b, n)
+
+Bits.split.go(a: Bits, b: Bits -> Bits, n: Nat): Pair<Bits, Bits>
+	case n {
+		zero : {b(Bits.e), a}
+		succ : case a {
+			e: {b(Bits.e), a}
+			o: Bits.split.go(a.pred, (bb) b(Bits.o(bb)), n.pred)
+			i: Bits.split.go(a.pred, (bb) b(Bits.i(bb)), n.pred)
+		}
+	}
+	
+
+App.Cemsort.init: App.Init<App.Cemsort.State>
+  let local = App.Cemsort.Local.new(App.Cemsort.Board.initial, App.Cemsort.Tile.empty, App.Cemsort.State.Turn.start, 0)
+  let local = local@crnt_num <- App.Cemsort.take_new_number(local, local@seed) 
+  App.Store.new<App.Cemsort.State>(local, unit)
+
+// Render function
+App.Cemsort.draw: App.Draw<App.Cemsort.State>
+  (state)
+  let local = state@local 
+  let get_tile = App.Cemsort.Board.get(local@board)
+  let show_tile = App.Cemsort.Tile.show
+  let button_style =
+    {
+      "width": "200px"
+      "height": "32px"
+      "margin": "2px"
+      "background-color": "#F0F0F0"
+      "display": "flex"
+      "justify-content": "center"
+      "align-items": "center"
+    }
+  let {visibility, opacity} = if local@turn =? App.Cemsort.State.Turn.end then {"visible", "1"} else {"hidden", "0"}
+
+<div>
+  <div style = {"font-size": "21px"}> "Next Number: " | show_tile(local@crnt_num) </div>
+  <div>
+    <div style ={
+        "position": "fixed"
+        "top": "0"
+        "bottom": "0"
+        "left": "0"
+        "right": "0"
+        "background": "rgba(0, 0, 0, 0.7)"
+        "transition": "opacity 500ms"
+        "visibility": visibility
+        "opacity": opacity
+      }>
+        <div style ={
+          "visibility": visibility
+          "margin":           "200px auto"
+          "padding":          "20px"
+          "background":       "#fff"
+          "border-radius":    "5px"
+          "display":          "flex"
+          "flex-direction":   "column"
+          "justify-content":  "center"
+          "align-items":      "center"
+          "width":            "25%"
+          "position":         "relative"
+          "transition":       "all 1s ease-in-out"
+        }>
+          <div style = {"width": "100%", "text-align": "center", "height": "84px", "font-size": "3em"}> 
+            "Score: " | if local@turn =? App.Cemsort.State.Turn.end then 
+              let points = App.Cemsort.Board.sum_points(local@board)
+              Nat.show(points)
+              else 
+                "" 
+          </div>
+          <button id = "play_again" style = {"width": "186px", "height": "48px", "font-size": "2em"}>"Play Again?"</button> 
+      </div>
+    </div>
+  </div>
+  <table>
+    <tr>
+      <td> {<button id="button_0_0" style = button_style> show_tile(get_tile({0, 0})) </button>}  </td>
+      <td> {<button id="button_1_0" style = button_style> show_tile(get_tile({1, 0})) </button>}  </td>
+      <td> {<button id="button_2_0" style = button_style> show_tile(get_tile({2, 0})) </button>}  </td>
+      <td> {<button id="button_3_0" style = button_style> show_tile(get_tile({3, 0})) </button>}  </td>
+      <td> {<button id="button_4_0" style = button_style> show_tile(get_tile({4, 0})) </button>}  </td>
+    </tr>
+    <tr>
+      <td> {<button id="button_0_1" style = button_style> show_tile(get_tile({0, 1})) </button>}  </td>
+      <td> {<button id="button_1_1" style = button_style> show_tile(get_tile({1, 1})) </button>}  </td>
+      <td> {<button id="button_2_1" style = button_style> show_tile(get_tile({2, 1})) </button>}  </td>
+      <td> {<button id="button_3_1" style = button_style> show_tile(get_tile({3, 1})) </button>}  </td>
+      <td> {<button id="button_4_1" style = button_style> show_tile(get_tile({4, 1})) </button>}  </td>
+    </tr>
+    <tr>
+      <td> {<button id="button_0_2" style = button_style> show_tile(get_tile({0, 2})) </button>}  </td>
+      <td> {<button id="button_1_2" style = button_style> show_tile(get_tile({1, 2})) </button>}  </td>
+      <td> {<button id="button_2_2" style = button_style> show_tile(get_tile({2, 2})) </button>}  </td>
+      <td> {<button id="button_3_2" style = button_style> show_tile(get_tile({3, 2})) </button>}  </td>
+      <td> {<button id="button_4_2" style = button_style> show_tile(get_tile({4, 2})) </button>}  </td>
+    </tr>
+    <tr>
+      <td> {<button id="button_0_3" style = button_style> show_tile(get_tile({0, 3})) </button>}  </td>
+      <td> {<button id="button_1_3" style = button_style> show_tile(get_tile({1, 3})) </button>}  </td>
+      <td> {<button id="button_2_3" style = button_style> show_tile(get_tile({2, 3})) </button>}  </td>
+      <td> {<button id="button_3_3" style = button_style> show_tile(get_tile({3, 3})) </button>}  </td>
+      <td> {<button id="button_4_3" style = button_style> show_tile(get_tile({4, 3})) </button>}  </td>
+    </tr>
+    <tr>
+      <td> {<button id="button_0_4" style = button_style> show_tile(get_tile({0, 4})) </button>}  </td>
+      <td> {<button id="button_1_4" style = button_style> show_tile(get_tile({1, 4})) </button>}  </td>
+      <td> {<button id="button_2_4" style = button_style> show_tile(get_tile({2, 4})) </button>}  </td>
+      <td> {<button id="button_3_4" style = button_style> show_tile(get_tile({3, 4})) </button>}  </td>
+      <td> {<button id="button_4_4" style = button_style> show_tile(get_tile({4, 4})) </button>}  </td>
+    </tr>
+  </table>
+</div>
+
+
+App.Cemsort.get_next_tile(button: String): App.Cemsort.Board.Pos
+	let x = Char.dec_value(String.at(7, button) <> ' ')
+  let y = Char.dec_value(String.last(button) <> ' ')
+  {x, y}
+
+// Event handler
+App.Cemsort.when: App.When<App.Cemsort.State>
+  (event, state)
+  let local = state@local 
+  case event {
+    mouse_click: 
+      log("event id: " | event.id)
+      switch String.eql(event.id) {
+        "play_again": 
+          let local_init = App.Cemsort.Local.new(App.Cemsort.Board.initial, App.Cemsort.Tile.empty, App.Cemsort.State.Turn.start, 0)
+          let local_init = local_init@crnt_num <- App.Cemsort.take_new_number(local_init, local@seed) 
+          App.set_local!(local_init)
+      } default
+        if String.is_empty(event.id) then App.pass!
+        else 
+          let pos = App.Cemsort.get_next_tile(event.id)
+          log("pos" | Pair.show!!(Nat.show, Nat.show, pos))
+          if App.Cemsort.State.is_move_valid(local, pos) 
+          then 
+            let local = local@board <- App.Cemsort.Board.set(local@board, pos, local@crnt_num)
+            log(App.Cemsort.Board.show(local@board))
+            let local = local@turn <~ Word.inc<App.Cemsort.State.Turn.length>
+            let local = local@crnt_num <- App.Cemsort.take_new_number(local, local@seed)
+            App.set_local!(local)
+          else App.pass!
+    frame: 
+      let random = Nat.random(local@seed)
+      let local = local@seed <- random
+      App.set_local<App.Cemsort.State>(local)
+  } default App.pass!
+
+// Global ticker 
+App.Cemsort.tick: App.Tick<App.Cemsort.State>
+  App.no_tick<App.Cemsort.State>
+
+// Global visitor
+App.Cemsort.post: App.Post<App.Cemsort.State>
+  (time, room, addr, data, glob)
+  glob
+
+
+// A "Cemsort" application
+App.Cemsort: App<App.Cemsort.State>
+  App.new<App.Cemsort.State>(
+    App.Cemsort.init 
+    App.Cemsort.draw 
+    App.Cemsort.when 
+    App.Cemsort.tick 
+    App.Cemsort.post 
+  )
+
+
